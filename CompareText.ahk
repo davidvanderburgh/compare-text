@@ -94,34 +94,92 @@ ReadRegionFromGui(n) {
     }
 }
 
-; ── Pick region by dragging a rectangle on screen ────────────────────────────
+; ── Pick region by dragging a rectangle on screen (snipping-tool style) ───────
 PickRegion(n) {
     MainGui.Hide()
     Sleep 200
 
-    overlay := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")  ; click-through
+    ; Get virtual screen bounds (multi-monitor)
+    vsX := SysGet(76)   ; SM_XVIRTUALSCREEN
+    vsY := SysGet(77)   ; SM_YVIRTUALSCREEN
+    vsW := SysGet(78)   ; SM_CXVIRTUALSCREEN
+    vsH := SysGet(79)   ; SM_CYVIRTUALSCREEN
+
+    ; Dark overlay covering all monitors
+    overlay := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale")
     overlay.BackColor := "000000"
-    WinSetTransparent(1, overlay)  ; nearly invisible full-screen overlay
-    overlay.Show("x0 y0 w" A_ScreenWidth " h" A_ScreenHeight)
+    overlay.Show("x" vsX " y" vsY " w" vsW " h" vsH)
+    WinSetTransparent(120, overlay)  ; semi-transparent dark tint
 
-    ToolTip "Click and drag to select Region " n " ...`nPress Escape to cancel"
+    ; Transparent selection highlight window (drawn on top of overlay)
+    selGui := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x20")
+    selGui.BackColor := "FFFFFF"
+    WinSetTransparent(1, selGui)  ; nearly invisible initially
 
-    ; Wait for mouse down
-    KeyWait "LButton", "D"
+    ; Border windows (4 thin bright borders around selection)
+    borders := []
+    Loop 4 {
+        b := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x20")
+        b.BackColor := "4A90D9"  ; blue accent like Windows snipping tool
+        borders.Push(b)
+    }
+
+    ; Set crosshair cursor
+    hCross := DllCall("LoadCursor", "Ptr", 0, "Ptr", 32515, "Ptr")  ; IDC_CROSS
+    oldCursor := DllCall("SetCursor", "Ptr", hCross, "Ptr")
+    DllCall("SetSystemCursor", "Ptr", DllCall("CopyImage", "Ptr", hCross, "UInt", 2, "Int", 0, "Int", 0, "UInt", 0, "Ptr"), "UInt", 32512)  ; OCR_NORMAL
+
+    ToolTip "Click and drag to select Region " n "`nPress Escape to cancel"
+
+    ; Wait for mouse down or Escape
+    Loop {
+        if GetKeyState("Escape", "P") {
+            ToolTip
+            for b in borders
+                b.Destroy()
+            selGui.Destroy()
+            overlay.Destroy()
+            RestoreCursors()
+            MainGui.Show()
+            return
+        }
+        if GetKeyState("LButton", "P")
+            break
+        Sleep 10
+    }
     MouseGetPos &sx, &sy
 
-    ; Track rubber-band
+    ; Track rubber-band with clear cutout
     while GetKeyState("LButton", "P") {
         MouseGetPos &cx, &cy
         rx := Min(sx, cx), ry := Min(sy, cy)
         rw := Abs(cx - sx), rh := Abs(cy - sy)
+
+        if (rw > 2 && rh > 2) {
+            ; Show bright selection area (cuts through the dark overlay visually)
+            selGui.Show("x" rx " y" ry " w" rw " h" rh " NA")
+            WinSetTransparent(1, selGui)
+
+            ; Draw 2px blue borders around selection
+            bdr := 2
+            borders[1].Show("x" rx " y" (ry - bdr) " w" rw " h" bdr " NA")           ; top
+            borders[2].Show("x" rx " y" (ry + rh) " w" rw " h" bdr " NA")             ; bottom
+            borders[3].Show("x" (rx - bdr) " y" (ry - bdr) " w" bdr " h" (rh + bdr*2) " NA")  ; left
+            borders[4].Show("x" (rx + rw) " y" (ry - bdr) " w" bdr " h" (rh + bdr*2) " NA")   ; right
+        }
+
         ToolTip "Region " n ": " rx "," ry " " rw "x" rh
         Sleep 16
     }
     MouseGetPos &ex, &ey
     ToolTip
 
+    ; Cleanup overlay
+    for b in borders
+        b.Destroy()
+    selGui.Destroy()
     overlay.Destroy()
+    RestoreCursors()
 
     fx := Min(sx, ex), fy := Min(sy, ey)
     fw := Abs(ex - sx), fh := Abs(ey - sy)
@@ -137,6 +195,11 @@ PickRegion(n) {
     MainGui["R" n "W"].Value := fw
     MainGui["R" n "H"].Value := fh
     MainGui.Show()
+}
+
+; ── Restore default system cursors ───────────────────────────────────────────
+RestoreCursors() {
+    DllCall("SystemParametersInfo", "UInt", 0x0057, "UInt", 0, "Ptr", 0, "UInt", 0)  ; SPI_SETCURSORS
 }
 
 ; ── Preview: show the normalized (binarized) capture ─────────────────────────
