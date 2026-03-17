@@ -1,0 +1,67 @@
+name: Build Release Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download AutoHotkey v2 portable
+        shell: bash
+        run: |
+          mkdir -p ahk
+          curl -sL -o ahk-v2.zip "https://www.autohotkey.com/download/ahk-v2.zip"
+          unzip -o ahk-v2.zip -d ahk
+
+      - name: Download OCR.ahk
+        shell: bash
+        run: |
+          mkdir -p Lib
+          curl -sL -o Lib/OCR.ahk "https://raw.githubusercontent.com/Descolada/OCR/main/Lib/OCR.ahk"
+
+      - name: Download Gdip_All.ahk
+        shell: bash
+        run: |
+          curl -sL -o Lib/Gdip_All.ahk "https://raw.githubusercontent.com/mmikeww/AHKv2-Gdip/master/Gdip_All.ahk"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Build installer
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ISCC.exe installer.iss //DMyAppVersion="$VERSION"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: Output/*.exe
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts/windows-installer
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows-installer/*.exe
