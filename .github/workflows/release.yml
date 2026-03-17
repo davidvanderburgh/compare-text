@@ -30,7 +30,7 @@ jobs:
       - name: Download Gdip_All.ahk
         shell: bash
         run: |
-          curl -sL -o Lib/Gdip_All.ahk "https://raw.githubusercontent.com/mmikeww/AHKv2-Gdip/master/Gdip_All.ahk"
+          curl -sL -o Lib/Gdip_All.ahk "https://raw.githubusercontent.com/buliasz/AHKv2-Gdip/master/Gdip_All.ahk"
 
       - name: Install Inno Setup
         shell: pwsh
