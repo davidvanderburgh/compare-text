@@ -15,11 +15,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download AutoHotkey v2 portable
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p ahk
-          curl -sL -o ahk-v2.zip "https://www.autohotkey.com/download/ahk-v2.zip"
-          unzip -o ahk-v2.zip -d ahk
+          New-Item -ItemType Directory -Path ahk -Force | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.21/AutoHotkey_2.0.21.zip" -OutFile ahk-v2.zip -UseBasicParsing
+          Expand-Archive -Path ahk-v2.zip -DestinationPath ahk -Force
 
       - name: Download OCR.ahk
         shell: bash
