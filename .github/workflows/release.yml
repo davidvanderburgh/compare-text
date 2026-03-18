@@ -7,14 +7,10 @@ on:
 
 permissions:
   contents: write
-  id-token: write
-  actions: read
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    outputs:
-      artifact-id: ${{ steps.upload-unsigned-artifact.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,53 +44,20 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           ISCC.exe installer.iss //DMyAppVersion="$VERSION"
 
-      - name: Upload unsigned artifact
-        id: upload-unsigned-artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer-unsigned
+          name: windows-installer
           path: Output/*.exe
 
-  sign-windows:
+  release:
     needs: [build-windows]
     runs-on: ubuntu-latest
-    if: vars.SIGNPATH_ORGANIZATION_ID != ''
     steps:
-      - name: Sign installer via SignPath
-        id: sign
-        uses: signpath/github-action-submit-signing-request@v2
-        with:
-          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-          organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
-          project-slug: 'compare-text'
-          signing-policy-slug: 'release-signing'
-          github-artifact-id: '${{ needs.build-windows.outputs.artifact-id }}'
-          wait-for-completion: true
-          output-artifact-directory: signed
-
-      - name: Upload signed artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer-signed
-          path: signed/*.exe
-
-  release:
-    needs: [build-windows, sign-windows]
-    if: always() && needs.build-windows.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download signed artifact
-        if: needs.sign-windows.result == 'success'
+      - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: windows-installer-signed
-          path: artifacts/windows-installer
-
-      - name: Download unsigned artifact (fallback)
-        if: needs.sign-windows.result != 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-installer-unsigned
+          name: windows-installer
           path: artifacts/windows-installer
 
       - name: Upload to GitHub Release
